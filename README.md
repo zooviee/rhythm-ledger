@@ -13,8 +13,8 @@ A private, hour-by-hour daily tracker. Log 24 hours a day, see a daily summary w
 Supabase dashboard → **SQL Editor** → **New query** → paste everything in [`schema.sql`](schema.sql) → **Run**.
 
 ### 2. Connect the site to Supabase
-Supabase → **Project Settings → API**. Copy the **Project URL** and the **anon public** key into [`config.js`](config.js).
-The anon key is designed to be public. Row-level security in `schema.sql` means each login can only read and write its own rows.
+Supabase → **Project Settings → API**. Copy the **Project URL** and the **publishable** key (API Keys tab) into [`config.js`](config.js).
+The publishable key is designed to be public. Row-level security in `schema.sql` means each login can only read and write its own rows.
 
 ### 3. Tell Supabase where the site lives
 Supabase → **Authentication → URL Configuration**:
