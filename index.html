@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Rhythm Ledger</title>
+<meta name="description" content="Hour-by-hour daily tracker with monthly summaries and a productivity dashboard.">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1b2220" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Rhythm">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a working ledger — sticky tab bar, one view at a time, hour rows like a time sheet */
+:root{
+  --bg:#f5f6f4; --surface:#ffffff; --surface-2:#eef0ed; --line:#d9ddd8; --fg:#1d2422; --muted:#5f6b67;
+  --accent:#2f5d62; --accent-soft:#dce8e7;
+  --c-prod:#2f6b5e; --c-non:#a4573f; --c-break:#b58a35; --c-off:#7b8794;
+  --c-prod-soft:#d9ebe5; --c-non-soft:#f2dfd7; --c-break-soft:#f3e9d2; --c-off-soft:#e3e7eb;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r:8px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#141917; --surface:#1b2220; --surface-2:#222a28; --line:#33403c; --fg:#e4ebe8; --muted:#96a39e;
+  --accent:#7fb3b0; --accent-soft:#24393a;
+  --c-prod:#6fb39f; --c-non:#d48a6f; --c-break:#d6b064; --c-off:#8f9bab;
+  --c-prod-soft:#203a33; --c-non-soft:#3d2a23; --c-break-soft:#3a3222; --c-off-soft:#272d34;
+  color-scheme:dark;
+}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.5;padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line);margin-top:env(safe-area-inset-top,0px)}
+.top .wrap{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-block:10px}
+.brand{font-family:var(--f-display);font-weight:700;font-size:20px;letter-spacing:-.01em;margin-right:auto;display:flex;align-items:baseline;gap:10px}
+.brand small{font-family:var(--f-mono);font-weight:400;font-size:12px;color:var(--muted)}
+nav.tabs{display:flex;gap:4px;flex-wrap:wrap}
+nav.tabs button{font:500 13px var(--f-body);border:1px solid transparent;background:none;color:var(--muted);padding:6px 12px;border-radius:999px;cursor:pointer}
+nav.tabs button[aria-current="page"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-soft)}
+nav.tabs button:hover{color:var(--fg)}
+.status{font:12px var(--f-mono);color:var(--muted);text-align:right}
+.savebox{display:flex;align-items:center;gap:8px}
+main{padding-block:20px 48px}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;letter-spacing:-.01em;text-wrap:balance;margin:0}
+h1{font-size:26px} h2{font-size:18px} h3{font-size:15px}
+.eyebrow{font:500 11px var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.bar .grow{margin-right:auto;display:grid;gap:2px}
+button.btn,select.btn,input.btn{font:500 13px var(--f-body);padding:7px 12px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+button.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+button.btn:disabled{opacity:.5;cursor:not-allowed}
+button.link{background:none;border:none;color:var(--accent);font:inherit;padding:0;cursor:pointer;text-decoration:underline}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.banner{padding:10px 14px;border-radius:var(--r);background:var(--surface-2);border:1px solid var(--line);margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.banner[data-tone="warn"]{background:var(--c-non-soft);border-color:transparent}
+.conn{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-radius:var(--r);margin-bottom:14px;background:var(--c-break-soft);font-size:13px}
+.conn b{font-weight:600}
+.daystrip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.mini{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;display:grid;gap:2px}
+.mini b{font:600 20px var(--f-display);font-variant-numeric:tabular-nums}
+.mini[data-cat="Productive"] b{color:var(--c-prod)} .mini[data-cat="Non-productive"] b{color:var(--c-non)}
+.mini[data-cat="Break"] b{color:var(--c-break)} .mini[data-cat="Off/asleep"] b{color:var(--c-off)}
+.tablebox{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th{font:500 11px var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);background:var(--surface-2);white-space:nowrap}
+td{padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+table.log{min-width:860px}
+table.log td.hr{font:500 13px var(--f-mono);white-space:nowrap;padding-top:12px;border-left:4px solid transparent}
+table.log tr[data-cat="Productive"] td.hr{border-left-color:var(--c-prod)}
+table.log tr[data-cat="Non-productive"] td.hr{border-left-color:var(--c-non)}
+table.log tr[data-cat="Break"] td.hr{border-left-color:var(--c-break)}
+table.log tr[data-cat="Off/asleep"] td.hr{border-left-color:var(--c-off)}
+table.log tr.now td.hr{background:var(--accent-soft);color:var(--accent)}
+.cell{width:100%;font:14px var(--f-body);color:var(--fg);background:transparent;border:1px solid transparent;border-radius:6px;padding:5px 7px}
+.cell:hover{border-color:var(--line)} .cell:focus{background:var(--surface);border-color:var(--accent)}
+select.cell{cursor:pointer}
+textarea.cell{resize:vertical;min-height:32px;line-height:1.4}
+.cell:disabled{color:var(--fg);opacity:.85;cursor:default}
+.rating{display:flex;gap:2px}
+.rating button{width:26px;height:28px;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:5px;font:500 12px var(--f-mono);cursor:pointer;padding:0}
+.rating button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.rating button:disabled{cursor:default}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:grid;gap:4px;min-width:0}
+.kpi b{font:700 26px var(--f-display);font-variant-numeric:tabular-nums;line-height:1.1;overflow-wrap:anywhere}
+.kpi span.sub{font-size:12px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;margin-bottom:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0;display:grid;gap:12px;align-content:start}
+.panel header{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.panel p.note{margin:0;color:var(--muted);font-size:13px}
+svg text{fill:var(--muted);font-family:var(--f-mono);font-size:10px}
+svg .gridline{stroke:var(--line);stroke-width:1}
+.heat{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:3px}
+.heat div{aspect-ratio:1/1.4;border-radius:3px;max-width:100%}
+.heatlbl{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:3px;font:10px var(--f-mono);color:var(--muted);text-align:center}
+.acts{display:grid;gap:8px}
+.act{display:grid;grid-template-columns:minmax(110px,170px) minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:13px}
+.act .track{height:12px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.act .fill{height:100%;border-radius:3px}
+.act .val{font:12px var(--f-mono);color:var(--muted);text-align:right;white-space:nowrap}
+.insights{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.insights li{padding-left:14px;position:relative;max-width:70ch}
+.insights li::before{content:"";position:absolute;left:0;top:.6em;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.empty{padding:40px 16px;text-align:center;color:var(--muted);display:grid;gap:10px;justify-items:center}
+.empty h2{color:var(--fg)}
+.archgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.arch{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:10px}
+.arch dl{display:grid;grid-template-columns:1fr auto;gap:4px 12px;margin:0;font-size:13px}
+.arch dt{color:var(--muted)} .arch dd{margin:0;font:500 13px var(--f-mono);text-align:right}
+.arch .row{display:flex;gap:8px;flex-wrap:wrap}
+.mute{color:var(--muted)}
+.num{font-family:var(--f-mono);text-align:right}
+.stack{display:flex;height:10px;border-radius:3px;overflow:hidden;min-width:120px;background:var(--surface-2)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:13px;z-index:20;max-width:calc(100% - 32px)}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+/* sign-in */
+.auth{max-width:400px;margin:8vh auto 0;display:grid;gap:18px}
+.auth form{display:grid;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.auth label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.auth input{font:16px var(--f-body);padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--fg)}
+.auth .msg{font-size:13px;min-height:1.2em}
+.auth .msg[data-tone="bad"]{color:var(--c-non)}
+.auth .msg[data-tone="ok"]{color:var(--c-prod)}
+.auth button.primary{padding:11px;font-size:15px}
+.auth p{margin:0}
+.setup{max-width:640px;margin:6vh auto 0}
+.setup ol{padding-left:20px;display:grid;gap:8px}
+code{font-family:var(--f-mono);font-size:.92em;background:var(--surface-2);padding:1px 5px;border-radius:4px}
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi:last-child{grid-column:1/-1}.grid2{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:760px){
+  .top .wrap{gap:8px;padding-block:8px}
+  .brand{font-size:18px}
+  nav.tabs{order:3;width:100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  nav.tabs button{flex:none;padding:8px 14px}
+  h1{font-size:21px}
+  .cell,select.btn,input.btn,button.btn{font-size:16px}
+  .cell{border-color:var(--line);background:var(--surface)}
+  .logbox{background:none;border:none;overflow:visible}
+  table.log{min-width:0}
+  table.log thead{display:none}
+  table.log,table.log tbody{display:block}
+  table.log tr{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:var(--r);padding:10px;margin-bottom:10px}
+  table.log tr[data-cat="Productive"]{border-left-color:var(--c-prod)}
+  table.log tr[data-cat="Non-productive"]{border-left-color:var(--c-non)}
+  table.log tr[data-cat="Break"]{border-left-color:var(--c-break)}
+  table.log tr[data-cat="Off/asleep"]{border-left-color:var(--c-off)}
+  table.log tr.now{outline:2px solid var(--accent);outline-offset:-1px}
+  table.log td{display:block;border:none;padding:0;min-width:0}
+  table.log td.hr{border-left:none;padding-top:9px;background:none!important}
+  table.log td.cat,table.log td.rate,table.log td.note{grid-column:1/-1}
+  .rating{gap:6px}
+  .rating button{flex:1;height:40px;width:auto;font-size:15px}
+  textarea.cell{min-height:44px}
+}
+@media (max-width:560px){.daystrip{grid-template-columns:repeat(2,minmax(0,1fr))}.act{grid-template-columns:minmax(0,1fr) 80px}.act .track{grid-column:1/-1;grid-row:2}.status{text-align:left}.bar .btn{flex:1 1 auto}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">Rhythm Ledger <small id="monthTag"></small></div>
+    <nav class="tabs" aria-label="Views" id="tabs" hidden>
+      <button data-view="log">Daily Log</button>
+      <button data-view="summary">Summary</button>
+      <button data-view="dashboard">Dashboard</button>
+      <button data-view="archive">Archive</button>
+    </nav>
+    <div class="savebox" id="savebox" hidden>
+      <span class="status" id="status" aria-live="polite"></span>
+      <button class="btn" id="saveNow" hidden>Save now</button>
+      <button class="btn" id="signOut" title="Sign out">Sign out</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="view-setup" class="setup" hidden></section>
+  <section id="view-auth" class="auth" hidden>
+    <div><span class="eyebrow">Private tracker</span><h1 id="authTitle">Sign in</h1></div>
+    <form id="authForm" novalidate>
+      <label for="authEmail">Email<input id="authEmail" type="email" autocomplete="email" required></label>
+      <label for="authPass">Password<input id="authPass" type="password" autocomplete="current-password" minlength="8" required></label>
+      <button class="btn primary" id="authSubmit" type="submit">Sign in</button>
+      <p class="msg" id="authMsg" role="status"></p>
+    </form>
+    <p class="mute" id="authSwitch"></p>
+  </section>
+  <div id="connBanner" class="conn" hidden></div>
+  <section id="view-log" hidden></section>
+  <section id="view-summary" hidden></section>
+  <section id="view-dashboard" hidden></section>
+  <section id="view-archive" hidden></section>
+</main>
+<datalist id="actList"></datalist>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(() => {
+const CATS = ["Productive","Non-productive","Break","Off/asleep"];
+const CAT_VAR = {"Productive":"--c-prod","Non-productive":"--c-non","Break":"--c-break","Off/asleep":"--c-off"};
+const ACTIVITIES = ["Prayer","Switch Hub Ops","Translink Ops","French","Backend Engineering","Risk & AI Security","Self Improvement","Bible Study","Meals","Social Interaction","Sleep","Commute","Rest","Other"];
+const DEFAULT_CAT = {"Prayer":"Productive","Switch Hub Ops":"Productive","Translink Ops":"Productive","French":"Productive","Backend Engineering":"Productive","Risk & AI Security":"Productive","Self Improvement":"Productive","Bible Study":"Productive","Meals":"Break","Social Interaction":"Break","Sleep":"Off/asleep","Commute":"Non-productive","Rest":"Break","Other":"Non-productive"};
+// Starter template: edit any day, then "Save as template" to make it yours.
+const STARTER = ["Sleep","Sleep","Sleep","Sleep","Sleep","Prayer","Bible Study","Meals","French","Switch Hub Ops","Switch Hub Ops","Switch Hub Ops","Meals","Switch Hub Ops","Switch Hub Ops","Switch Hub Ops","Translink Ops","Translink Ops","Meals","Backend Engineering","Risk & AI Security","Social Interaction","Self Improvement","Sleep"];
+const WD = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const VIEWS = ["log","summary","dashboard","archive"];
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = n => String(n).padStart(2,"0");
+const ymd = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const parseYmd = s => { const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); };
+const monthOf = s => s.slice(0,7);
+const monthName = m => { const [y,mo]=m.split("-").map(Number); return new Date(y,mo-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"}); };
+const hrLabel = h => pad(h)+":00";
+const fmt1 = n => (Math.round(n*10)/10).toFixed(1);
+const CUR_MONTH = () => monthOf(ymd(new Date()));
+
+const S = {
+  sb:null, user:null, conn:"connecting", canWrite:true,
+  days:{}, archives:{}, template:null,
+  date: ymd(new Date()), view:"log", month: CUR_MONTH(),
+  loaded:false, rolled:false, unlocked:{}, confirmClear:false, pendingRender:false
+};
+
+$("#actList").innerHTML = ACTIVITIES.map(a=>`<option value="${esc(a)}">`).join("");
+
+/* ---------- data helpers ---------- */
+function blankDay(date){
+  return {date, month:monthOf(date), updatedAt:null, hours:Array.from({length:24},(_,h)=>({h,activity:"",category:"",rating:null,notes:""}))};
+}
+function templateRows(){
+  const t = S.template && Array.isArray(S.template.hours) ? S.template.hours : null;
+  return t || STARTER.map(a=>({activity:a,category:DEFAULT_CAT[a]||""}));
+}
+function getDay(date){ return S.days[date] || null; }
+function ensureDay(date){ if(!S.days[date]) S.days[date]=blankDay(date); return S.days[date]; }
+
+function summarizeDay(day){
+  const cats = {"Productive":0,"Non-productive":0,"Break":0,"Off/asleep":0};
+  let logged=0, rSum=0, rN=0, pR=0, pN=0; const acts={};
+  for(const r of (day?.hours||[])){
+    if(!r.activity && !r.category) continue;
+    logged++;
+    if(cats[r.category]!==undefined) cats[r.category]++;
+    if(r.activity) acts[r.activity]=(acts[r.activity]||0)+1;
+    if(r.rating){ rSum+=r.rating; rN++; if(r.category==="Productive"){pR+=r.rating;pN++;} }
+  }
+  const top = Object.entries(acts).filter(([a])=>a!=="Sleep").sort((a,b)=>b[1]-a[1])[0];
+  const awake = logged - cats["Off/asleep"];
+  return {cats, logged, avg: rN? rSum/rN : null, rated:rN, prodAvg: pN? pR/pN : null,
+    top: top? top[0] : "—", focus: awake>0 ? cats["Productive"]/awake : null};
+}
+function daysInMonth(m){ return Object.values(S.days).filter(d=>d.month===m && summarizeDay(d).logged>0).sort((a,b)=>a.date<b.date?-1:1); }
+
+function monthStats(m){
+  const days = daysInMonth(m);
+  const cats = {"Productive":0,"Non-productive":0,"Break":0,"Off/asleep":0};
+  const acts = {}; const hourProd = Array(24).fill(0), hourLogged = Array(24).fill(0), hourR = Array(24).fill(0), hourRN=Array(24).fill(0);
+  const wd = Array.from({length:7},()=>({prod:0,n:0}));
+  let rSum=0,rN=0;
+  for(const d of days){
+    const s = summarizeDay(d); const w = parseYmd(d.date).getDay();
+    wd[w].prod += s.cats["Productive"]; wd[w].n++;
+    for(const r of d.hours){
+      if(!r.activity && !r.category) continue;
+      if(cats[r.category]!==undefined) cats[r.category]++;
+      hourLogged[r.h]++; if(r.category==="Productive") hourProd[r.h]++;
+      if(r.rating){ rSum+=r.rating; rN++; hourR[r.h]+=r.rating; hourRN[r.h]++; }
+      if(r.activity){
+        const a = acts[r.activity] ||= {hrs:0, r:0, rn:0, cat:{}};
+        a.hrs++; if(r.rating){a.r+=r.rating;a.rn++;}
+        if(r.category) a.cat[r.category]=(a.cat[r.category]||0)+1;
+      }
+    }
+  }
+  const actList = Object.entries(acts).map(([name,a])=>({name,hrs:a.hrs,avg:a.rn?a.r/a.rn:null,
+    cat:Object.entries(a.cat).sort((x,y)=>y[1]-x[1])[0]?.[0]||""})).sort((a,b)=>b.hrs-a.hrs);
+  const hourRate = hourLogged.map((n,h)=> n? hourProd[h]/n : null);
+  let best=null;
+  for(let h=0;h<=21;h++){ const v=[0,1,2].map(i=>hourRate[h+i]); if(v.some(x=>x==null)) continue; const s=v.reduce((a,b)=>a+b,0)/3; if(!best||s>best.s) best={h,s}; }
+  return {days, n:days.length, cats, avg: rN? rSum/rN:null, actList, hourRate, hourLogged, hourAvgR: hourR.map((s,h)=>hourRN[h]?s/hourRN[h]:null), wd, best};
+}
+function archiveSummary(m){
+  const st = monthStats(m);
+  return {month:m, archivedAt:new Date().toISOString(), daysLogged:st.n, productiveHours:st.cats["Productive"],
+    nonProductiveHours:st.cats["Non-productive"], breakHours:st.cats["Break"], offHours:st.cats["Off/asleep"],
+    avgRating: st.avg!=null? Math.round(st.avg*100)/100 : null,
+    topActivities: st.actList.filter(a=>a.name!=="Sleep").slice(0,5).map(a=>({name:a.name,hours:a.hrs})),
+    peakWindow: st.best? hrLabel(st.best.h)+"–"+hrLabel(st.best.h+3) : null};
+}
+
+/* ---------- this-device copy (per signed-in user) ---------- */
+// Every edit is written to this device first, then synced to Supabase.
+// If you're offline or sync fails, nothing is lost; it syncs when it can.
+const key = k => `rhythm-ledger:${S.user?.id||"anon"}:${k}`;
+function lsGet(k,f){ try{ const v=localStorage.getItem(key(k)); return v?JSON.parse(v):f; }catch(e){ return f; } }
+function lsSet(k,v){ try{ localStorage.setItem(key(k),JSON.stringify(v)); return true; }catch(e){ return false; } }
+let pending = new Set();
+function saveLocal(){ lsSet("days",S.days); }
+function savePending(){ lsSet("pending",[...pending]); updateSaveUi(); }
+
+/* ---------- status + banners ---------- */
+let toastT;
+function toast(msg){ let t=$(".toast"); if(!t){t=document.createElement("div");t.className="toast";t.setAttribute("role","status");document.body.appendChild(t);} t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2400); }
+function status(msg){ $("#status").textContent = msg; }
+const writing={}, again={}, dirty={}, timers={}, tries={};
+function updateSaveUi(){
+  const n=pending.size, btn=$("#saveNow");
+  btn.hidden = n===0;
+  if(Object.values(writing).some(Boolean)) return;
+  if(S.conn==="ok") status(n? `${n} day${n>1?"s":""} not synced` : "All changes saved");
+  else if(S.conn==="offline") status(n? "Offline · saved on this device" : "Offline");
+  else if(S.conn==="connecting") status("Syncing…");
+  else status(n? "Saved on this device only" : "Not syncing");
+}
+function setConn(state, detail){
+  S.conn=state; const b=$("#connBanner");
+  if(state==="ok"||state==="connecting"||!S.user){ b.hidden=true; updateSaveUi(); return; }
+  b.hidden=false;
+  if(state==="offline") b.innerHTML=`<span><b>You're offline.</b> Keep logging; entries are saved on this device and sync when you're back online.</span>`;
+  else b.innerHTML=`<span><b>Couldn't sync with your database.</b> Entries are safe on this device. ${detail?`<span class="mute">(${esc(detail)})</span>`:""}</span><button class="btn" id="retryBtn">Try again</button>`;
+  const r=$("#retryBtn"); if(r) r.onclick=()=>pull();
+  updateSaveUi();
+}
+
+/* ---------- saving ---------- */
+function scheduleSave(date){
+  const d=S.days[date]; if(d) d.updatedAt=new Date().toISOString();
+  pending.add(date); saveLocal(); savePending();
+  dirty[date]=true;
+  clearTimeout(timers[date]); timers[date]=setTimeout(()=>flush(date),600);
+}
+async function flush(date){
+  clearTimeout(timers[date]);
+  if(!S.sb || !S.user || S.conn!=="ok" || !S.days[date]){ dirty[date]=false; updateSaveUi(); return; }
+  if(writing[date]){ again[date]=true; return; }
+  writing[date]=true; status("Saving…");
+  let ok=false;
+  const d=S.days[date];
+  try{
+    const {error} = await S.sb.from("days").upsert({user_id:S.user.id, date:d.date, month:d.month, hours:d.hours, updated_at:d.updatedAt||new Date().toISOString()}, {onConflict:"user_id,date"});
+    if(error) throw error;
+    if(S.archives[d.month]){
+      const sum=archiveSummary(d.month);
+      const r=await S.sb.from("archives").upsert({user_id:S.user.id, month:d.month, summary:sum, archived_at:S.archives[d.month].archivedAt||sum.archivedAt},{onConflict:"user_id,month"});
+      if(!r.error) S.archives[d.month]={...sum, archivedAt:S.archives[d.month].archivedAt||sum.archivedAt};
+    }
+    ok=true; tries[date]=0;
+  }catch(e){
+    if(!navigator.onLine) setConn("offline");
+    else { tries[date]=(tries[date]||0)+1;
+      if(tries[date]<=3) setTimeout(()=>flush(date),1500*tries[date]+Math.random()*500);
+      else setConn("error", e?.message||"save failed"); }
+  }
+  writing[date]=false;
+  if(again[date]){ again[date]=false; flush(date); return; }
+  dirty[date]=false;
+  if(ok){ pending.delete(date); savePending(); }
+  updateSaveUi();
+}
+function flushAll(){ for(const d of [...pending]) flush(d); }
+$("#saveNow").onclick=()=>{ if(S.conn!=="ok") pull(); else flushAll(); };
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden") flushAll();
+  else if(S.user) pull();             // coming back to the tab: fetch changes made on your other device
+});
+window.addEventListener("pagehide",flushAll);
+window.addEventListener("online",()=>{ if(S.user) pull(); });
+window.addEventListener("offline",()=>{ if(S.user) setConn("offline"); });
+
+/* ---------- loading from Supabase ---------- */
+let pulling=false;
+async function pull(){
+  if(!S.sb || !S.user || pulling) return;
+  if(!navigator.onLine){ setConn("offline"); return; }
+  pulling=true; if(S.conn!=="ok") setConn("connecting");
+  try{
+    const [days, arch, set] = await Promise.all([
+      S.sb.from("days").select("date,month,hours,updated_at").order("date",{ascending:false}).limit(5000),
+      S.sb.from("archives").select("month,summary,archived_at"),
+      S.sb.from("settings").select("template").maybeSingle()
+    ]);
+    if(days.error) throw days.error;
+    for(const r of days.data){
+      const id=r.date;
+      if(dirty[id]||writing[id]) continue;
+      const local=S.days[id];
+      if(pending.has(id) && local && (local.updatedAt||"") > (r.updated_at||"")) continue; // keep newer edits made here
+      S.days[id]={date:r.date, month:r.month, hours:r.hours, updatedAt:r.updated_at};
+      pending.delete(id);
+    }
+    if(!arch.error){ S.archives={}; arch.data.forEach(a=>S.archives[a.month]={...a.summary, archivedAt:a.archived_at}); }
+    if(!set.error){
+      if(set.data?.template) { S.template=set.data.template; lsSet("template",S.template); }
+      else if(S.template) S.sb.from("settings").upsert({user_id:S.user.id, template:S.template, updated_at:new Date().toISOString()}).then(()=>{});
+    }
+    saveLocal(); savePending();
+    S.loaded=true; setConn("ok");
+    flushAll(); rerender(); rollover();
+  }catch(e){
+    if(!navigator.onLine) setConn("offline");
+    else if(e?.code==="PGRST205"||/relation .* does not exist|schema cache/i.test(e?.message||"")) setConn("error","database tables missing: run schema.sql in Supabase");
+    else setConn("error", e?.message||"couldn't load");
+  }
+  pulling=false;
+}
+setInterval(()=>{ if(S.user && document.visibilityState==="visible" && !Object.values(dirty).some(Boolean)) pull(); }, 60000);
+
+/* ---------- monthly rollover ---------- */
+async function rollover(){
+  if(S.rolled || !S.loaded || !S.sb || !S.user || S.conn!=="ok") return;
+  S.rolled=true;
+  const cur = CUR_MONTH();
+  const months = [...new Set(Object.values(S.days).map(d=>d.month))].filter(m=>m<cur && !S.archives[m] && daysInMonth(m).length);
+  for(const m of months){
+    const sum=archiveSummary(m);
+    const {error}=await S.sb.from("archives").upsert({user_id:S.user.id, month:m, summary:sum, archived_at:sum.archivedAt},{onConflict:"user_id,month"});
+    if(!error){ S.archives[m]=sum; toast(monthName(m)+" archived. A fresh month has started."); }
+  }
+  rerender();
+}
+
+/* ---------- views ---------- */
+function setView(v){
+  S.view=v;
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current", b.dataset.view===v?"page":"false"));
+  VIEWS.forEach(x=>$("#view-"+x).hidden = x!==v);
+  try{ history.replaceState(null,"","#"+v); }catch(e){}
+  window.scrollTo(0,0);
+  render();
+}
+document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>setView(b.dataset.view)));
+function rerender(){
+  if(!S.user) return;
+  if(S.view==="log"){ const tb=document.querySelector("#view-log tbody"); if(tb && tb.contains(document.activeElement)) S.pendingRender=true; else renderLog(); }
+  else render();
+}
+function monthOptions(){
+  const set = new Set([CUR_MONTH(), ...Object.values(S.days).map(d=>d.month), ...Object.keys(S.archives)]);
+  return [...set].sort().reverse();
+}
+function monthSelect(id){
+  return `<select class="btn" id="${id}" aria-label="Month">${monthOptions().map(m=>`<option value="${m}" ${m===S.month?"selected":""}>${esc(monthName(m))}${S.archives[m]?" · archived":m===CUR_MONTH()?" · current":""}</option>`).join("")}</select>`;
+}
+function bindMonth(id){ const el=$("#"+id); if(el) el.addEventListener("change",e=>{S.month=e.target.value; render();}); }
+function render(){
+  if(!S.user) return;
+  $("#monthTag").textContent = monthName(CUR_MONTH());
+  if(S.view==="log") renderLog();
+  else if(S.view==="summary") renderSummary();
+  else if(S.view==="dashboard") renderDashboard();
+  else renderArchive();
+}
+
+/* ---- Daily Log ---- */
+function renderLog(){
+  const date=S.date, day=getDay(date), m=monthOf(date);
+  const locked = !!S.archives[m] && !S.unlocked[m];
+  const s = summarizeDay(day);
+  const d = parseYmd(date);
+  const isToday = date===ymd(new Date());
+  const nowH = new Date().getHours();
+  const rows = (day||blankDay(date)).hours;
+  const tpl = templateRows();
+  const el = $("#view-log");
+  el.innerHTML = `
+  <div class="bar">
+    <div class="grow"><span class="eyebrow">Daily Log · 24 hours</span>
+      <h1>${esc(d.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric",year:"numeric"}))}</h1></div>
+    <button class="btn" id="prevDay" aria-label="Previous day">← Prev</button>
+    <input type="date" class="btn" id="pickDate" value="${date}" aria-label="Pick a date">
+    <button class="btn" id="nextDay" aria-label="Next day">Next →</button>
+    ${isToday?"":`<button class="btn" id="toToday">Today</button>`}
+  </div>
+  ${S.archives[m] ? `<div class="banner"><span>${esc(monthName(m))} is archived. ${S.unlocked[m]?"Edits will update the archive summary.":"It's read-only so the monthly record stays fixed."}</span><button class="btn" id="unlock">${S.unlocked[m]?"Lock again":"Unlock to edit"}</button></div>`:""}
+  <div class="daystrip">
+    ${CATS.map(c=>`<div class="mini" data-cat="${c}"><span class="eyebrow">${c}</span><b>${s.cats[c]} h</b></div>`).join("")}
+  </div>
+  <div class="bar" id="logBar">
+    <div class="grow"><span class="mute">${s.logged}/24 hours logged · average rating <b>${s.avg!=null?fmt1(s.avg):"—"}</b>${s.rated?` from ${s.rated} rated hour${s.rated>1?"s":""}`:""}</span></div>
+    ${locked?"":`<button class="btn primary" id="prefill" title="Fill empty hours from your template">Prefill day</button>
+    <button class="btn" id="saveTpl" ${s.logged?"":"disabled"} title="Use this day's activities as the prefill for future days">Save as template</button>
+    <span class="confirm" id="clearWrap">${S.confirmClear?`<span class="mute">Clear all 24 hours?</span><button class="btn" id="clearYes">Clear</button><button class="btn" id="clearNo">Keep</button>`:`<button class="btn" id="clearDay" ${s.logged?"":"disabled"}>Clear day</button>`}</span>`}
+  </div>
+  <div class="tablebox logbox">
+  <table class="log">
+    <thead><tr><th style="width:84px">Hour</th><th style="width:200px">Activity</th><th style="width:150px">Category</th><th style="width:150px">Rating 1–5</th><th>Notes</th></tr></thead>
+    <tbody>
+    ${rows.map(r=>`<tr data-h="${r.h}" data-cat="${esc(r.category)}" class="${isToday&&r.h===nowH?"now":""}">
+      <td class="hr">${hrLabel(r.h)}</td>
+      <td class="act"><input class="cell" id="a-${r.h}" list="actList" value="${esc(r.activity)}" placeholder="${esc(tpl[r.h]?.activity||"")}" ${locked?"disabled":""} aria-label="Activity at ${hrLabel(r.h)}" autocomplete="off"></td>
+      <td class="cat"><select class="cell" id="c-${r.h}" ${locked?"disabled":""} aria-label="Category at ${hrLabel(r.h)}">
+        <option value="" ${!r.category?"selected":""}>Category…</option>
+        ${CATS.map(c=>`<option ${r.category===c?"selected":""}>${c}</option>`).join("")}</select></td>
+      <td class="rate"><div class="rating" role="group" aria-label="Rating at ${hrLabel(r.h)}">${[1,2,3,4,5].map(n=>`<button type="button" data-r="${n}" aria-pressed="${r.rating===n}" ${locked?"disabled":""}>${n}</button>`).join("")}</div></td>
+      <td class="note"><textarea class="cell" id="n-${r.h}" rows="1" placeholder="What did you do?" ${locked?"disabled":""} aria-label="Notes at ${hrLabel(r.h)}">${esc(r.notes)}</textarea></td>
+    </tr>`).join("")}
+    </tbody>
+  </table></div>`;
+
+  const go = delta => { const x=parseYmd(S.date); x.setDate(x.getDate()+delta); S.date=ymd(x); S.confirmClear=false; renderLog(); };
+  $("#prevDay").onclick=()=>go(-1); $("#nextDay").onclick=()=>go(1);
+  $("#pickDate").onchange=e=>{ if(e.target.value){S.date=e.target.value; S.confirmClear=false; renderLog();} };
+  $("#toToday") && ($("#toToday").onclick=()=>{S.date=ymd(new Date()); renderLog();});
+  $("#unlock") && ($("#unlock").onclick=()=>{S.unlocked[m]=!S.unlocked[m]; renderLog();});
+  if(locked) return;
+  $("#prefill").onclick=()=>{
+    const dd=ensureDay(date); let n=0;
+    dd.hours.forEach((r,h)=>{ if(!r.activity && tpl[h]?.activity){ r.activity=tpl[h].activity; if(!r.category) r.category=tpl[h].category||DEFAULT_CAT[r.activity]||""; n++; } });
+    if(n) scheduleSave(date);
+    renderLog(); toast(n? `Prefilled ${n} hour${n>1?"s":""}` : "Every hour already has an activity");
+  };
+  $("#saveTpl").onclick=async()=>{
+    const hours=(getDay(date)||blankDay(date)).hours.map(r=>({activity:r.activity,category:r.category}));
+    S.template={hours}; lsSet("template",S.template);
+    if(S.sb && S.user && S.conn==="ok"){
+      const {error}=await S.sb.from("settings").upsert({user_id:S.user.id, template:S.template, updated_at:new Date().toISOString()});
+      toast(error?"Template saved on this device; it will sync later":"Template saved");
+    } else toast("Template saved on this device; it will sync later");
+  };
+  $("#clearWrap").onclick=e=>{
+    const id=e.target.id;
+    if(id==="clearDay"){S.confirmClear=true; renderLog();}
+    else if(id==="clearNo"){S.confirmClear=false; renderLog();}
+    else if(id==="clearYes"){S.confirmClear=false; S.days[date]=blankDay(date); scheduleSave(date); renderLog(); toast("Day cleared");}
+  };
+  const tbody = el.querySelector("tbody");
+  tbody.addEventListener("input", e=>{
+    const tr=e.target.closest("tr"); if(!tr) return; const h=+tr.dataset.h; const r=ensureDay(date).hours[h];
+    if(e.target.id.startsWith("a-")){ r.activity=e.target.value; scheduleSave(date); }
+    else if(e.target.id.startsWith("n-")){ r.notes=e.target.value; autoGrow(e.target); scheduleSave(date); }
+  });
+  tbody.addEventListener("change", e=>{
+    const tr=e.target.closest("tr"); if(!tr) return; const h=+tr.dataset.h; const r=ensureDay(date).hours[h];
+    if(e.target.id.startsWith("a-")){
+      if(r.activity && DEFAULT_CAT[r.activity] && !r.category){ r.category=DEFAULT_CAT[r.activity]; $("#c-"+h).value=r.category; tr.dataset.cat=r.category; }
+      scheduleSave(date); refreshStrip();
+    } else if(e.target.id.startsWith("c-")){ r.category=e.target.value; tr.dataset.cat=r.category; scheduleSave(date); refreshStrip(); }
+  });
+  tbody.addEventListener("click", e=>{
+    const b=e.target.closest(".rating button"); if(!b) return;
+    const tr=b.closest("tr"); const h=+tr.dataset.h; const r=ensureDay(date).hours[h]; const n=+b.dataset.r;
+    r.rating = r.rating===n ? null : n;
+    tr.querySelectorAll(".rating button").forEach(x=>x.setAttribute("aria-pressed", String(+x.dataset.r===r.rating)));
+    scheduleSave(date); refreshStrip();
+  });
+  tbody.addEventListener("focusout", ()=>{ setTimeout(()=>{ if(!tbody.contains(document.activeElement)){ refreshStrip(); if(S.pendingRender){ S.pendingRender=false; renderLog(); } } },0); });
+  el.querySelectorAll("textarea.cell").forEach(autoGrow);
+}
+function autoGrow(t){ t.style.height="auto"; t.style.height=Math.min(t.scrollHeight,240)+"px"; }
+function refreshStrip(){
+  const s=summarizeDay(getDay(S.date));
+  document.querySelectorAll("#view-log .mini").forEach(m=>m.querySelector("b").textContent=s.cats[m.dataset.cat]+" h");
+  const g=document.querySelector("#logBar .grow span");
+  if(g) g.innerHTML=`${s.logged}/24 hours logged · average rating <b>${s.avg!=null?fmt1(s.avg):"—"}</b>${s.rated?` from ${s.rated} rated hour${s.rated>1?"s":""}`:""}`;
+  const st=$("#saveTpl"); if(st) st.disabled=!s.logged;
+  const cd=$("#clearDay"); if(cd) cd.disabled=!s.logged;
+}
+
+/* ---- Summary ---- */
+function stackBar(c){ const t=CATS.reduce((a,k)=>a+c[k],0)||1; return `<div class="stack" aria-hidden="true">${CATS.map(k=>c[k]?`<span style="width:${c[k]/t*100}%;background:var(${CAT_VAR[k]})"></span>`:"").join("")}</div>`; }
+const r1 = v => v==null?"—":fmt1(v);
+function renderSummary(){
+  const st=monthStats(S.month); const el=$("#view-summary");
+  const head=`<div class="bar"><div class="grow"><span class="eyebrow">Summary · one row per day</span><h1>${esc(monthName(S.month))}</h1></div>${monthSelect("mSum")}<button class="btn" id="csvSum" ${st.n?"":"disabled"}>Download CSV</button></div>`;
+  if(!st.n){ el.innerHTML=head+emptyState(); bindMonth("mSum"); bindEmpty(); return; }
+  const tot=st.cats; const all=CATS.reduce((a,k)=>a+tot[k],0); const aw=all-tot["Off/asleep"];
+  el.innerHTML = head+`
+  <div class="legend" style="margin-bottom:10px">${CATS.map(c=>`<span><i style="background:var(${CAT_VAR[c]})"></i>${c}</span>`).join("")}</div>
+  <div class="tablebox"><table>
+    <thead><tr><th>Date</th><th>Day</th><th>Split</th><th class="num">Productive</th><th class="num">Non-prod.</th><th class="num">Break</th><th class="num">Off</th><th class="num">Logged</th><th class="num">Focus %</th><th class="num">Avg rating</th><th class="num">Prod. rating</th><th>Top activity</th></tr></thead>
+    <tbody>${st.days.map(d=>{ const s=summarizeDay(d); const dt=parseYmd(d.date); return `<tr>
+      <td class="num" style="text-align:left"><a href="#log" data-go="${d.date}" style="color:var(--accent)">${d.date.slice(5)}</a></td>
+      <td class="mute">${WD[dt.getDay()]}</td><td>${stackBar(s.cats)}</td>
+      <td class="num">${s.cats["Productive"]}</td><td class="num">${s.cats["Non-productive"]}</td><td class="num">${s.cats["Break"]}</td><td class="num">${s.cats["Off/asleep"]}</td>
+      <td class="num">${s.logged}/24</td><td class="num">${s.focus!=null?Math.round(s.focus*100)+"%":"—"}</td>
+      <td class="num"><b>${r1(s.avg)}</b></td><td class="num">${r1(s.prodAvg)}</td><td>${esc(s.top)}</td></tr>`;}).join("")}
+    </tbody>
+    <tfoot><tr><td colspan="3"><b>Month · ${st.n} day${st.n>1?"s":""}</b></td>
+      <td class="num"><b>${tot["Productive"]}</b></td><td class="num">${tot["Non-productive"]}</td><td class="num">${tot["Break"]}</td><td class="num">${tot["Off/asleep"]}</td>
+      <td class="num">${all}</td><td class="num">${aw?Math.round(tot["Productive"]/aw*100)+"%":"—"}</td>
+      <td class="num"><b>${r1(st.avg)}</b></td><td></td><td>${esc(st.actList.find(a=>a.name!=="Sleep")?.name||"—")}</td></tr></tfoot>
+  </table></div>
+  <p class="mute" style="margin-top:10px;font-size:12px">Focus % = productive hours ÷ hours awake (logged hours minus Off/asleep). Average rating counts only hours you rated.</p>`;
+  bindMonth("mSum");
+  el.querySelectorAll("[data-go]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault(); S.date=a.dataset.go; setView("log");}));
+  $("#csvSum").onclick=()=>downloadCsv(S.month);
+}
+function emptyState(){ return `<div class="panel"><div class="empty"><h2>Nothing logged for this month yet</h2><p>Open the Daily Log, press Prefill day, and adjust each hour. Your summary and dashboard fill in as you go.</p><button class="btn primary" id="goLog">Open today's log</button></div></div>`; }
+function bindEmpty(){ $("#goLog") && ($("#goLog").onclick=()=>{S.date=ymd(new Date()); setView("log");}); }
+
+/* ---- Dashboard ---- */
+function renderDashboard(){
+  const st=monthStats(S.month); const el=$("#view-dashboard");
+  const head=`<div class="bar"><div class="grow"><span class="eyebrow">Dashboard</span><h1>Where your hours went · ${esc(monthName(S.month))}</h1></div>${monthSelect("mDash")}</div>`;
+  if(!st.n){ el.innerHTML=head+emptyState(); bindMonth("mDash"); bindEmpty(); return; }
+  const prod=st.cats["Productive"]; const work=st.actList.filter(a=>a.name!=="Sleep");
+  const topProdAct=st.actList.filter(a=>a.cat==="Productive").sort((a,b)=>b.hrs-a.hrs)[0];
+  const rated=st.actList.filter(a=>a.avg!=null && a.hrs>=2);
+  const bestRated=[...rated].sort((a,b)=>b.avg-a.avg)[0], lowRated=[...rated].sort((a,b)=>a.avg-b.avg)[0];
+  const wdAvg=st.wd.map((w,i)=>({i,v:w.n?w.prod/w.n:null}));
+  const bestWd=wdAvg.filter(w=>w.v!=null).sort((a,b)=>b.v-a.v)[0];
+  const insights=[];
+  if(st.best) insights.push(`Your strongest focus window is <b>${hrLabel(st.best.h)}–${hrLabel(st.best.h+3)}</b>, productive ${Math.round(st.best.s*100)}% of the time you logged it.`);
+  if(topProdAct) insights.push(`<b>${esc(topProdAct.name)}</b> took the most productive time: ${topProdAct.hrs} h, about ${Math.round(topProdAct.hrs/(prod||1)*100)}% of all productive hours.`);
+  if(bestRated && lowRated && bestRated.name!==lowRated.name) insights.push(`You rated <b>${esc(bestRated.name)}</b> highest (${fmt1(bestRated.avg)}) and <b>${esc(lowRated.name)}</b> lowest (${fmt1(lowRated.avg)}).`);
+  if(bestWd && st.n>=3) insights.push(`<b>${WD[bestWd.i]}</b> is your most productive weekday so far, averaging ${fmt1(bestWd.v)} productive hours.`);
+  insights.push(`You're logging an average of ${fmt1(st.cats["Off/asleep"]/st.n)} h off/asleep and ${fmt1(st.cats["Non-productive"]/st.n)} h non-productive per day.`);
+
+  el.innerHTML = head+`
+  <div class="kpis">
+    <div class="kpi"><span class="eyebrow">Productive hours</span><b>${prod}</b><span class="sub">${st.n} day${st.n>1?"s":""} logged</span></div>
+    <div class="kpi"><span class="eyebrow">Per day</span><b>${fmt1(prod/st.n)} h</b><span class="sub">productive, on average</span></div>
+    <div class="kpi"><span class="eyebrow">Avg rating</span><b>${r1(st.avg)}<span style="font-size:14px;color:var(--muted)"> / 5</span></b><span class="sub">across rated hours</span></div>
+    <div class="kpi"><span class="eyebrow">Peak window</span><b>${st.best?hrLabel(st.best.h):"—"}</b><span class="sub">${st.best?"3 hours from here":"log more hours to see it"}</span></div>
+    <div class="kpi"><span class="eyebrow">Most time on</span><b style="font-size:20px">${esc(work[0]?.name||"—")}</b><span class="sub">${work[0]?work[0].hrs+" h this month":""}</span></div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><header><h2>Hours by day</h2><div class="legend">${CATS.map(c=>`<span><i style="background:var(${CAT_VAR[c]})"></i>${c}</span>`).join("")}</div></header><div id="chartDays"></div></div>
+    <div class="panel"><header><h2>What stood out</h2></header><ul class="insights">${insights.map(i=>`<li>${i}</li>`).join("")}</ul></div>
+  </div>
+  <div class="panel" style="margin-bottom:16px"><header><h2>When you're most productive</h2><p class="note">Share of logged days each hour was Productive. Darker means more often.</p></header>
+    <div class="heat">${st.hourRate.map((v,h)=>`<div title="${hrLabel(h)} · ${v==null?"not logged":Math.round(v*100)+"% productive"}${st.hourAvgR[h]!=null?" · avg rating "+fmt1(st.hourAvgR[h]):""}" style="background:${v==null?"var(--surface-2)":`color-mix(in srgb, var(--c-prod) ${Math.round(12+v*88)}%, var(--surface-2))`};${st.best&&h>=st.best.h&&h<st.best.h+3?"outline:2px solid var(--accent);outline-offset:1px":""}"></div>`).join("")}</div>
+    <div class="heatlbl">${Array.from({length:24},(_,h)=>`<span>${h%3===0?pad(h):""}</span>`).join("")}</div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><header><h2>Activities you do most</h2><p class="note">Hours this month · avg rating</p></header>
+      <div class="acts">${st.actList.slice(0,12).map(a=>`<div class="act"><span>${esc(a.name)}</span><div class="track"><div class="fill" style="width:${a.hrs/st.actList[0].hrs*100}%;background:var(${CAT_VAR[a.cat]||"--c-off"})"></div></div><span class="val">${a.hrs} h · ${r1(a.avg)}</span></div>`).join("")}</div></div>
+    <div class="panel"><header><h2>Productive hours by weekday</h2><p class="note">Average per logged day</p></header><div id="chartWd"></div></div>
+  </div>`;
+  bindMonth("mDash");
+  drawDays(st); drawWd(wdAvg);
+}
+function drawDays(st){
+  const [y,mo]=S.month.split("-").map(Number); const nDays=new Date(y,mo,0).getDate();
+  const W=640,H=230,L=28,R=6,T=8,B=22; const cw=(W-L-R)/nDays; const sy=v=>T+(H-T-B)*(1-v/24);
+  const byDate={}; st.days.forEach(d=>byDate[d.date]=summarizeDay(d));
+  let g=""; [0,6,12,18,24].forEach(v=>{ g+=`<line class="gridline" x1="${L}" x2="${W-R}" y1="${sy(v)}" y2="${sy(v)}"/><text x="${L-6}" y="${sy(v)+3}" text-anchor="end">${v}h</text>`; });
+  for(let i=1;i<=nDays;i++){
+    const ds=`${S.month}-${pad(i)}`, s=byDate[ds]; const x=L+(i-1)*cw+cw*.15, w=cw*.7; let acc=0;
+    if(s) CATS.forEach(c=>{ const v=s.cats[c]; if(!v) return; g+=`<rect x="${x.toFixed(1)}" y="${sy(acc+v).toFixed(1)}" width="${w.toFixed(1)}" height="${(sy(acc)-sy(acc+v)).toFixed(1)}" fill="var(${CAT_VAR[c]})"><title>${ds} · ${c}: ${v} h</title></rect>`; acc+=v; });
+    if(i===1||i%5===0) g+=`<text x="${(x+w/2).toFixed(1)}" y="${H-6}" text-anchor="middle">${i}</text>`;
+  }
+  $("#chartDays").innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Stacked hours by category for each day">${g}</svg>`;
+}
+function drawWd(wdAvg){
+  const order=[1,2,3,4,5,6,0]; const W=360,H=200,L=28,R=6,T=14,B=22;
+  const max=Math.max(1,...wdAvg.map(w=>w.v||0)); const top=Math.ceil(max/2)*2; const sy=v=>T+(H-T-B)*(1-v/top);
+  const cw=(W-L-R)/7; let g=""; const step=Math.max(1,top/4);
+  for(let v=0;v<=top;v+=step){ g+=`<line class="gridline" x1="${L}" x2="${W-R}" y1="${sy(v)}" y2="${sy(v)}"/><text x="${L-6}" y="${sy(v)+3}" text-anchor="end">${v}</text>`; }
+  order.forEach((d,i)=>{ const w=wdAvg[d]; const x=L+i*cw+cw*.2, bw=cw*.6;
+    if(w.v!=null){ g+=`<rect x="${x}" y="${sy(w.v)}" width="${bw}" height="${sy(0)-sy(w.v)}" rx="2" fill="var(--c-prod)"><title>${WD[d]}: ${fmt1(w.v)} h</title></rect><text x="${x+bw/2}" y="${sy(w.v)-4}" text-anchor="middle">${fmt1(w.v)}</text>`; }
+    g+=`<text x="${x+bw/2}" y="${H-6}" text-anchor="middle">${WD[d]}</text>`; });
+  $("#chartWd").innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Average productive hours per weekday">${g}</svg>`;
+}
+
+/* ---- Archive ---- */
+function renderArchive(){
+  const el=$("#view-archive"); const list=Object.values(S.archives).sort((a,b)=>a.month<b.month?1:-1);
+  const cur=CUR_MONTH(); const curSt=monthStats(cur);
+  const next=new Date(); next.setMonth(next.getMonth()+1,1);
+  el.innerHTML=`<div class="bar"><div class="grow"><span class="eyebrow">Archive</span><h1>Closed months</h1></div></div>
+  <div class="banner">Each month closes automatically: the first time you open the tracker in a new month, last month is archived with its totals and the log starts fresh. ${esc(monthName(cur))} is in progress with ${curSt.n} day${curSt.n===1?"":"s"} logged.</div>
+  ${list.length?`<div class="archgrid">${list.map(a=>`<article class="arch">
+    <div><span class="eyebrow">Archived ${esc(new Date(a.archivedAt).toLocaleDateString())}</span><h2>${esc(monthName(a.month))}</h2></div>
+    <dl><dt>Days logged</dt><dd>${a.daysLogged}</dd><dt>Productive</dt><dd>${a.productiveHours} h</dd><dt>Non-productive</dt><dd>${a.nonProductiveHours} h</dd><dt>Break</dt><dd>${a.breakHours} h</dd><dt>Off/asleep</dt><dd>${a.offHours} h</dd><dt>Avg rating</dt><dd>${a.avgRating!=null?fmt1(a.avgRating):"—"}</dd><dt>Peak window</dt><dd>${esc(a.peakWindow||"—")}</dd><dt>Top activity</dt><dd>${esc(a.topActivities?.[0]?.name||"—")}</dd></dl>
+    <div class="row"><button class="btn" data-open="${a.month}">Open dashboard</button><button class="btn" data-sum="${a.month}">Daily summary</button><button class="btn" data-csv="${a.month}">Download CSV</button></div>
+  </article>`).join("")}</div>`:`<div class="panel"><div class="empty"><h2>No archived months yet</h2><p>${esc(monthName(cur))} will be archived when ${esc(next.toLocaleDateString(undefined,{month:"long"}))} begins.</p></div></div>`}`;
+  el.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>{S.month=b.dataset.open; setView("dashboard");});
+  el.querySelectorAll("[data-sum]").forEach(b=>b.onclick=()=>{S.month=b.dataset.sum; setView("summary");});
+  el.querySelectorAll("[data-csv]").forEach(b=>b.onclick=()=>downloadCsv(b.dataset.csv));
+}
+function downloadCsv(m){
+  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  const lines=[["date","hour","activity","category","rating","notes"].join(",")];
+  daysInMonth(m).forEach(d=>d.hours.forEach(r=>{ if(r.activity||r.category||r.notes) lines.push([d.date,hrLabel(r.h),q(r.activity),q(r.category),r.rating??"",q(r.notes)].join(",")); }));
+  const url=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/csv"}));
+  const a=document.createElement("a"); a.href=url; a.download=`rhythm-ledger-${m}.csv`; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+
+/* ---------- sign-in ---------- */
+let authMode="signin";
+function showAuth(){
+  VIEWS.forEach(v=>$("#view-"+v).hidden=true);
+  $("#tabs").hidden=true; $("#savebox").hidden=true; $("#connBanner").hidden=true;
+  $("#view-auth").hidden=false; setAuthMode(authMode);
+}
+function setAuthMode(m){
+  authMode=m;
+  $("#authTitle").textContent = m==="signin"?"Sign in":"Create your account";
+  $("#authSubmit").textContent = m==="signin"?"Sign in":"Create account";
+  $("#authPass").autocomplete = m==="signin"?"current-password":"new-password";
+  $("#authSwitch").innerHTML = m==="signin"
+    ? `First time here? <button class="link" id="swap" type="button">Create your account</button>`
+    : `Already have an account? <button class="link" id="swap" type="button">Sign in</button>`;
+  $("#swap").onclick=()=>{ $("#authMsg").textContent=""; setAuthMode(m==="signin"?"signup":"signin"); };
+}
+function authMsg(t,tone){ const m=$("#authMsg"); m.textContent=t; m.dataset.tone=tone||""; }
+$("#authForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const email=$("#authEmail").value.trim(), password=$("#authPass").value;
+  if(!email || !/.+@.+\..+/.test(email)) return authMsg("Enter your email address.","bad");
+  if(password.length<8) return authMsg("Use a password of at least 8 characters.","bad");
+  const btn=$("#authSubmit"); btn.disabled=true; authMsg(authMode==="signin"?"Signing in…":"Creating your account…");
+  try{
+    if(authMode==="signin"){
+      const {error}=await S.sb.auth.signInWithPassword({email,password});
+      if(error) throw error;
+    } else {
+      const {data,error}=await S.sb.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}});
+      if(error) throw error;
+      if(!data.session){ authMsg("Check your inbox and tap the confirmation link, then sign in here.","ok"); setAuthMode("signin"); }
+    }
+  }catch(err){
+    const msg=err?.message||"";
+    authMsg(/invalid login/i.test(msg)?"That email and password don't match. Try again."
+      : /not confirmed/i.test(msg)?"Confirm your email first: tap the link Supabase sent you, then sign in."
+      : /signups? not allowed|disabled/i.test(msg)?"New sign-ups are turned off for this tracker."
+      : /fetch|network/i.test(msg)?"Can't reach the server. Check your connection and try again."
+      : msg||"Something went wrong. Try again.","bad");
+  }
+  btn.disabled=false;
+});
+$("#signOut").onclick=async()=>{
+  flushAll();
+  if(pending.size && !confirmSignOut){ confirmSignOut=true; toast("Some changes haven't synced yet. Tap Sign out again to sign out anyway."); setTimeout(()=>confirmSignOut=false,4000); return; }
+  await S.sb.auth.signOut();
+};
+let confirmSignOut=false;
+
+function enterApp(user){
+  const switching = S.user?.id !== user.id;
+  S.user=user;
+  if(switching){
+    S.days=lsGet("days",{})||{}; S.template=lsGet("template",null); pending=new Set(lsGet("pending",[]));
+    S.archives={}; S.loaded=false; S.rolled=false;
+  }
+  $("#view-auth").hidden=true; $("#view-setup").hidden=true;
+  $("#tabs").hidden=false; $("#savebox").hidden=false;
+  const h0=(location.hash||"").slice(1);
+  setView(VIEWS.includes(h0)?h0:S.view);
+  if(switching) pull();
+}
+function leaveApp(){ S.user=null; S.days={}; S.archives={}; pending=new Set(); showAuth(); }
+
+function showSetup(){
+  $("#view-setup").hidden=false;
+  $("#view-setup").innerHTML=`<span class="eyebrow">Almost there</span><h1>Connect your database</h1>
+  <p>This tracker isn't connected to Supabase yet. Open <code>config.js</code> in the repository and paste in your Supabase <b>Project URL</b> and <b>anon public key</b> (Supabase → Project Settings → API). Then reload this page.</p>
+  ${window.supabase?"":`<p class="mute">The Supabase library also didn't load. Check your internet connection.</p>`}`;
+}
+
+/* ---------- boot ---------- */
+$("#monthTag").textContent = monthName(CUR_MONTH());
+const CFG=window.RL_CONFIG||{};
+if(!CFG.supabaseUrl || !CFG.supabaseAnonKey || !window.supabase){ showSetup(); return; }
+S.sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true}});
+S.sb.auth.onAuthStateChange((event, session)=>{
+  if(session?.user) enterApp(session.user);
+  else if(event==="SIGNED_OUT" || event==="INITIAL_SESSION") leaveApp();
+});
+setInterval(()=>{ if(S.user && CUR_MONTH()!==S._m){ S._m=CUR_MONTH(); S.rolled=false; rollover(); render(); } }, 60000); S._m=CUR_MONTH();
+
+if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+})();
+</script>
+</body>
+</html>

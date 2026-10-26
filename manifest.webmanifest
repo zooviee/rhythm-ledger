@@ -1,0 +1,16 @@
+{
+  "name": "Rhythm Ledger",
+  "short_name": "Rhythm",
+  "description": "Hour-by-hour daily tracker with monthly summaries and a productivity dashboard.",
+  "start_url": "./#log",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f6f4",
+  "theme_color": "#2f5d62",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+    {"src": "icon.svg", "sizes": "any", "type": "image/svg+xml"}
+  ]
+}
