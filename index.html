@@ -110,10 +110,19 @@ svg .gridline{stroke:var(--line);stroke-width:1}
 .heat div{aspect-ratio:1/1.4;border-radius:3px;max-width:100%}
 .heatlbl{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:3px;font:10px var(--f-mono);color:var(--muted);text-align:center}
 .acts{display:grid;gap:8px}
-.act{display:grid;grid-template-columns:minmax(110px,170px) minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:13px}
-.act .track{height:12px;background:var(--surface-2);border-radius:3px;overflow:hidden}
-.act .fill{height:100%;border-radius:3px}
-.act .val{font:12px var(--f-mono);color:var(--muted);text-align:right;white-space:nowrap}
+.actbar{display:grid;grid-template-columns:minmax(110px,170px) minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:13px}
+.actbar .track{height:12px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.actbar .fill{height:100%;border-radius:3px}
+.actbar .val{font:12px var(--f-mono);color:var(--muted);text-align:right;white-space:nowrap}
+/* activities manager */
+table.acts-t{min-width:0}
+table.acts-t td{vertical-align:middle}
+table.acts-t td.hrs{font-family:var(--f-mono);text-align:right;white-space:nowrap;color:var(--muted)}
+.addrow{display:grid;grid-template-columns:minmax(0,1fr) 180px auto;gap:10px;margin:14px 0}
+.addrow input,.addrow select{font:14px var(--f-body);padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--fg);min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:4px 4px 4px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface-2);font-size:13px}
+.chip button{padding:3px 10px;border-radius:999px}
 .insights{display:grid;gap:8px;margin:0;padding:0;list-style:none}
 .insights li{padding-left:14px;position:relative;max-width:70ch}
 .insights li::before{content:"";position:absolute;left:0;top:.6em;width:6px;height:6px;border-radius:50%;background:var(--accent)}
@@ -168,7 +177,18 @@ code{font-family:var(--f-mono);font-size:.92em;background:var(--surface-2);paddi
   .rating button{flex:1;height:40px;width:auto;font-size:15px}
   textarea.cell{min-height:44px}
 }
-@media (max-width:560px){.daystrip{grid-template-columns:repeat(2,minmax(0,1fr))}.act{grid-template-columns:minmax(0,1fr) 80px}.act .track{grid-column:1/-1;grid-row:2}.status{text-align:left}.bar .btn{flex:1 1 auto}}
+@media (max-width:640px){
+  table.acts-t thead{display:none}
+  table.acts-t,table.acts-t tbody{display:block}
+  table.acts-t tr{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:10px;border-bottom:1px solid var(--line)}
+  table.acts-t tr:last-child{border-bottom:none}
+  table.acts-t td{display:block;border:none;padding:0;min-width:0}
+  table.acts-t td.nm{grid-column:1/-1}
+  .addrow{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .addrow button{grid-column:1/-1}
+  .addrow input,.addrow select{font-size:16px}
+}
+@media (max-width:560px){.daystrip{grid-template-columns:repeat(2,minmax(0,1fr))}.actbar{grid-template-columns:minmax(0,1fr) 80px}.actbar .track{grid-column:1/-1;grid-row:2}.status{text-align:left}.bar .btn{flex:1 1 auto}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -182,6 +202,7 @@ code{font-family:var(--f-mono);font-size:.92em;background:var(--surface-2);paddi
       <button data-view="summary">Summary</button>
       <button data-view="dashboard">Dashboard</button>
       <button data-view="archive">Archive</button>
+      <button data-view="activities">Activities</button>
     </nav>
     <div class="savebox" id="savebox" hidden>
       <span class="status" id="status" aria-live="polite"></span>
@@ -208,6 +229,7 @@ code{font-family:var(--f-mono);font-size:.92em;background:var(--surface-2);paddi
   <section id="view-summary" hidden></section>
   <section id="view-dashboard" hidden></section>
   <section id="view-archive" hidden></section>
+  <section id="view-activities" hidden></section>
 </main>
 <datalist id="actList"></datalist>
 
@@ -222,7 +244,7 @@ const DEFAULT_CAT = {"Prayer":"Productive","Switch Hub Ops":"Productive","Transl
 // Starter template: edit any day, then "Save as template" to make it yours.
 const STARTER = ["Sleep","Sleep","Sleep","Sleep","Sleep","Prayer","Bible Study","Meals","French","Switch Hub Ops","Switch Hub Ops","Switch Hub Ops","Meals","Switch Hub Ops","Switch Hub Ops","Switch Hub Ops","Translink Ops","Translink Ops","Meals","Backend Engineering","Risk & AI Security","Social Interaction","Self Improvement","Sleep"];
 const WD = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-const VIEWS = ["log","summary","dashboard","archive"];
+const VIEWS = ["log","summary","dashboard","archive","activities"];
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -242,7 +264,18 @@ const S = {
   loaded:false, rolled:false, unlocked:{}, confirmClear:false, pendingRender:false
 };
 
-$("#actList").innerHTML = ACTIVITIES.map(a=>`<option value="${esc(a)}">`).join("");
+/* ---------- your activity list ---------- */
+// Stored with your template in the settings table ({hours, activities}), so it syncs across devices.
+const DEFAULT_ACTS = ACTIVITIES.map(n=>({name:n, category:DEFAULT_CAT[n]||""}));
+const acts = () => S.acts || DEFAULT_ACTS;
+let actMap = new Map();                       // lower-case name → activity
+function refreshActs(){
+  actMap = new Map(acts().map(a=>[a.name.trim().toLowerCase(), a]));
+  $("#actList").innerHTML = acts().map(a=>`<option value="${esc(a.name)}">`).join("");
+}
+const canon = n => { const t=String(n||"").trim(); return actMap.get(t.toLowerCase())?.name || t; };   // "gym" → "Gym" when listed
+const catFor = n => actMap.get(String(n||"").trim().toLowerCase())?.category || "";
+refreshActs();
 
 /* ---------- data helpers ---------- */
 function blankDay(date){
@@ -250,7 +283,7 @@ function blankDay(date){
 }
 function templateRows(){
   const t = S.template && Array.isArray(S.template.hours) ? S.template.hours : null;
-  return t || STARTER.map(a=>({activity:a,category:DEFAULT_CAT[a]||""}));
+  return t || STARTER.map(a=>({activity:a,category:catFor(a)||DEFAULT_CAT[a]||""}));
 }
 function getDay(date){ return S.days[date] || null; }
 function ensureDay(date){ if(!S.days[date]) S.days[date]=blankDay(date); return S.days[date]; }
@@ -262,7 +295,7 @@ function summarizeDay(day){
     if(!r.activity && !r.category) continue;
     logged++;
     if(cats[r.category]!==undefined) cats[r.category]++;
-    if(r.activity) acts[r.activity]=(acts[r.activity]||0)+1;
+    if(r.activity){ const k=canon(r.activity); acts[k]=(acts[k]||0)+1; }
     if(r.rating){ rSum+=r.rating; rN++; if(r.category==="Productive"){pR+=r.rating;pN++;} }
   }
   const top = Object.entries(acts).filter(([a])=>a!=="Sleep").sort((a,b)=>b[1]-a[1])[0];
@@ -287,7 +320,7 @@ function monthStats(m){
       hourLogged[r.h]++; if(r.category==="Productive") hourProd[r.h]++;
       if(r.rating){ rSum+=r.rating; rN++; hourR[r.h]+=r.rating; hourRN[r.h]++; }
       if(r.activity){
-        const a = acts[r.activity] ||= {hrs:0, r:0, rn:0, cat:{}};
+        const a = acts[canon(r.activity)] ||= {hrs:0, r:0, rn:0, cat:{}};
         a.hrs++; if(r.rating){a.r+=r.rating;a.rn++;}
         if(r.category) a.cat[r.category]=(a.cat[r.category]||0)+1;
       }
@@ -389,7 +422,22 @@ window.addEventListener("online",()=>{ if(S.user) pull(); });
 window.addEventListener("offline",()=>{ if(S.user) setConn("offline"); });
 
 /* ---------- loading from Supabase ---------- */
-let pulling=false;
+let pulling=false, needSettingsPush=false;
+function applySettings(v){
+  S.template = Array.isArray(v?.hours) ? {hours:v.hours} : null;
+  S.acts = Array.isArray(v?.activities) ? v.activities : null;
+  lsSet("settings",{hours:S.template?.hours||null, activities:S.acts});
+  refreshActs();
+}
+async function pushSettings(){
+  needSettingsPush=false;
+  const payload={hours:S.template?.hours||null, activities:S.acts||null};
+  lsSet("settings",payload);
+  if(!S.sb || !S.user || S.conn!=="ok"){ S.settingsDirty=true; lsSet("settingsDirty",true); return false; }
+  const {error}=await S.sb.from("settings").upsert({user_id:S.user.id, template:payload, updated_at:new Date().toISOString()});
+  S.settingsDirty=!!error; lsSet("settingsDirty",S.settingsDirty);
+  return !error;
+}
 async function pull(){
   if(!S.sb || !S.user || pulling) return;
   if(!navigator.onLine){ setConn("offline"); return; }
@@ -411,11 +459,13 @@ async function pull(){
     }
     if(!arch.error){ S.archives={}; arch.data.forEach(a=>S.archives[a.month]={...a.summary, archivedAt:a.archived_at}); }
     if(!set.error){
-      if(set.data?.template) { S.template=set.data.template; lsSet("template",S.template); }
-      else if(S.template) S.sb.from("settings").upsert({user_id:S.user.id, template:S.template, updated_at:new Date().toISOString()}).then(()=>{});
+      const remote=set.data?.template;
+      if(remote && !S.settingsDirty) applySettings(remote);
+      else if(S.settingsDirty || S.template || S.acts) needSettingsPush=true;
     }
     saveLocal(); savePending();
     S.loaded=true; setConn("ok");
+    if(needSettingsPush) pushSettings();
     flushAll(); rerender(); rollover();
   }catch(e){
     if(!navigator.onLine) setConn("offline");
@@ -453,6 +503,7 @@ document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("clic
 function rerender(){
   if(!S.user) return;
   if(S.view==="log"){ const tb=document.querySelector("#view-log tbody"); if(tb && tb.contains(document.activeElement)) S.pendingRender=true; else renderLog(); }
+  else if(S.view==="activities" && $("#view-activities").contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement.tagName)) return;
   else render();
 }
 function monthOptions(){
@@ -469,7 +520,98 @@ function render(){
   if(S.view==="log") renderLog();
   else if(S.view==="summary") renderSummary();
   else if(S.view==="dashboard") renderDashboard();
+  else if(S.view==="activities") renderActivities();
   else renderArchive();
+}
+
+/* ---- Activities manager ---- */
+const AM = {confirmDel:null, confirmReset:false, rename:null};   // inline confirmation state
+function usage(){                                   // hours logged per activity, all time (case-insensitive)
+  const u=new Map(), cats=new Map();
+  for(const d of Object.values(S.days)) for(const r of d.hours){
+    if(!r.activity) continue; const k=r.activity.trim().toLowerCase();
+    if(!u.has(k)) u.set(k,{name:r.activity.trim(),n:0});
+    u.get(k).n++;
+    if(r.category){ const c=cats.get(k)||{}; c[r.category]=(c[r.category]||0)+1; cats.set(k,c); }
+  }
+  return {u,cats};
+}
+function catOptions(sel){ return `<option value="" ${!sel?"selected":""}>No default</option>`+CATS.map(c=>`<option ${sel===c?"selected":""}>${c}</option>`).join(""); }
+async function saveActs(list, msg){
+  S.acts=list.map(a=>({name:a.name.trim(), category:a.category||""}));
+  refreshActs();
+  const ok=await pushSettings();
+  if(msg) toast(ok?msg:msg+" on this device; it will sync later");
+}
+function renderActivities(){
+  const el=$("#view-activities"); const list=acts(); const {u,cats}=usage();
+  const listed=new Set(list.map(a=>a.name.trim().toLowerCase()));
+  const unlisted=[...u.entries()].filter(([k])=>!listed.has(k)).sort((a,b)=>b[1].n-a[1].n);
+  el.innerHTML=`
+  <div class="bar"><div class="grow"><span class="eyebrow">Activities</span><h1>Your activity list</h1></div></div>
+  <p class="mute" style="max-width:70ch;margin:0 0 14px">These are the suggestions in the Daily Log. Picking one fills in its category for you. Changes sync to your other devices.</p>
+  ${AM.rename?`<div class="banner"><span>Also rename the <b>${AM.rename.n}</b> hour${AM.rename.n>1?"s":""} you've already logged as “${esc(AM.rename.from)}” to “${esc(AM.rename.to)}”? This keeps your dashboard history together.</span><button class="btn primary" id="renYes">Rename past entries</button><button class="btn" id="renNo">Keep them as they are</button></div>`:""}
+  <div class="tablebox"><table class="acts-t">
+    <thead><tr><th>Activity</th><th style="width:190px">Default category</th><th class="num" style="width:110px">Hours logged</th><th style="width:170px"></th></tr></thead>
+    <tbody>${list.map((a,i)=>{ const n=u.get(a.name.trim().toLowerCase())?.n||0; return `<tr data-i="${i}">
+      <td class="nm"><input class="cell" id="an-${i}" value="${esc(a.name)}" aria-label="Activity name" autocomplete="off"></td>
+      <td><select class="cell" id="ac-${i}" aria-label="Default category for ${esc(a.name)}">${catOptions(a.category)}</select></td>
+      <td class="hrs">${n} h</td>
+      <td style="text-align:right">${AM.confirmDel===i?`<span class="confirm"><button class="btn" data-delyes="${i}">Remove</button><button class="btn" data-delno="1">Keep</button></span>`:`<button class="btn" data-del="${i}" aria-label="Remove ${esc(a.name)}">Remove</button>`}</td>
+    </tr>`;}).join("")}</tbody>
+  </table></div>
+  <form class="addrow" id="addAct" novalidate>
+    <input id="newActName" placeholder="New activity, e.g. Gym" aria-label="New activity name" autocomplete="off">
+    <select id="newActCat" aria-label="Default category for new activity">${catOptions("Productive")}</select>
+    <button class="btn primary" type="submit">Add activity</button>
+  </form>
+  ${unlisted.length?`<div class="panel" style="margin-bottom:14px"><header><h2>In your log but not on this list</h2><p class="note">Add them so they're suggested and categorised automatically.</p></header>
+    <div class="chips">${unlisted.map(([k,v])=>`<span class="chip">${esc(v.name)} · ${v.n} h<button class="btn" data-add="${esc(k)}">Add</button></span>`).join("")}</div></div>`:""}
+  <p class="mute" style="max-width:70ch;font-size:13px">Removing an activity only takes it off this list. Hours you've already logged keep their name and still count on the Summary and Dashboard. Changing a default category affects new entries only.</p>
+  <div class="confirm">${AM.confirmReset?`<span class="mute">Replace your list with the original 14 activities?</span><button class="btn" id="resetYes">Restore defaults</button><button class="btn" id="resetNo">Cancel</button>`:`<button class="btn" id="resetActs">Restore default list</button>`}</div>`;
+
+  const names=()=>acts().map(a=>a.name.trim().toLowerCase());
+  el.querySelectorAll('input[id^="an-"]').forEach(inp=>inp.addEventListener("change",async()=>{
+    const i=+inp.id.slice(3), old=acts()[i].name, nn=inp.value.trim();
+    if(!nn){ inp.value=old; toast("An activity needs a name"); return; }
+    if(nn===old) return;
+    if(nn.toLowerCase()!==old.toLowerCase() && names().includes(nn.toLowerCase())){ inp.value=old; toast(`“${nn}” is already on your list`); return; }
+    const list=acts().map((a,j)=>j===i?{...a,name:nn}:a);
+    const n=u.get(old.trim().toLowerCase())?.n||0;
+    AM.rename = n ? {from:old,to:nn,n} : null;
+    await saveActs(list, "Activity renamed"); renderActivities();
+  }));
+  el.querySelectorAll('select[id^="ac-"]').forEach(sel=>sel.addEventListener("change",()=>{
+    const i=+sel.id.slice(3); saveActs(acts().map((a,j)=>j===i?{...a,category:sel.value}:a), "Default category updated");
+  }));
+  el.querySelector("tbody").addEventListener("click",async e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    if(b.dataset.del!==undefined){ AM.confirmDel=+b.dataset.del; renderActivities(); }
+    else if(b.dataset.delno){ AM.confirmDel=null; renderActivities(); }
+    else if(b.dataset.delyes!==undefined){ const i=+b.dataset.delyes; AM.confirmDel=null; const nm=acts()[i].name; await saveActs(acts().filter((_,j)=>j!==i), `Removed “${nm}”`); renderActivities(); }
+  });
+  $("#addAct").addEventListener("submit",async e=>{
+    e.preventDefault(); const nm=$("#newActName").value.trim();
+    if(!nm){ toast("Type a name for the new activity"); return; }
+    if(names().includes(nm.toLowerCase())){ toast(`“${nm}” is already on your list`); return; }
+    await saveActs([...acts(),{name:nm,category:$("#newActCat").value}], `Added “${nm}”`); renderActivities();
+    $("#newActName").focus();
+  });
+  el.querySelectorAll("[data-add]").forEach(b=>b.onclick=async()=>{
+    const k=b.dataset.add, v=u.get(k); const c=Object.entries(cats.get(k)||{}).sort((x,y)=>y[1]-x[1])[0]?.[0]||"";
+    await saveActs([...acts(),{name:v.name,category:c}], `Added “${v.name}”`); renderActivities();
+  });
+  $("#renYes") && ($("#renYes").onclick=()=>{
+    const {from,to}=AM.rename; const f=from.trim().toLowerCase(); let n=0;
+    for(const [date,d] of Object.entries(S.days)){ let ch=false;
+      for(const r of d.hours) if(r.activity && r.activity.trim().toLowerCase()===f){ r.activity=to; ch=true; n++; }
+      if(ch) scheduleSave(date); }
+    AM.rename=null; toast(`Renamed ${n} past hour${n===1?"":"s"}`); renderActivities();
+  });
+  $("#renNo") && ($("#renNo").onclick=()=>{ AM.rename=null; renderActivities(); });
+  $("#resetActs") && ($("#resetActs").onclick=()=>{ AM.confirmReset=true; renderActivities(); });
+  $("#resetNo") && ($("#resetNo").onclick=()=>{ AM.confirmReset=false; renderActivities(); });
+  $("#resetYes") && ($("#resetYes").onclick=async()=>{ AM.confirmReset=false; await saveActs(DEFAULT_ACTS,"Default list restored"); renderActivities(); });
 }
 
 /* ---- Daily Log ---- */
@@ -508,7 +650,7 @@ function renderLog(){
     <tbody>
     ${rows.map(r=>`<tr data-h="${r.h}" data-cat="${esc(r.category)}" class="${isToday&&r.h===nowH?"now":""}">
       <td class="hr">${hrLabel(r.h)}</td>
-      <td class="act"><input class="cell" id="a-${r.h}" list="actList" value="${esc(r.activity)}" placeholder="${esc(tpl[r.h]?.activity||"")}" ${locked?"disabled":""} aria-label="Activity at ${hrLabel(r.h)}" autocomplete="off"></td>
+      <td class="actc"><input class="cell" id="a-${r.h}" list="actList" value="${esc(r.activity)}" placeholder="${esc(tpl[r.h]?.activity||"")}" ${locked?"disabled":""} aria-label="Activity at ${hrLabel(r.h)}" autocomplete="off"></td>
       <td class="cat"><select class="cell" id="c-${r.h}" ${locked?"disabled":""} aria-label="Category at ${hrLabel(r.h)}">
         <option value="" ${!r.category?"selected":""}>Category…</option>
         ${CATS.map(c=>`<option ${r.category===c?"selected":""}>${c}</option>`).join("")}</select></td>
@@ -526,17 +668,14 @@ function renderLog(){
   if(locked) return;
   $("#prefill").onclick=()=>{
     const dd=ensureDay(date); let n=0;
-    dd.hours.forEach((r,h)=>{ if(!r.activity && tpl[h]?.activity){ r.activity=tpl[h].activity; if(!r.category) r.category=tpl[h].category||DEFAULT_CAT[r.activity]||""; n++; } });
+    dd.hours.forEach((r,h)=>{ if(!r.activity && tpl[h]?.activity){ r.activity=tpl[h].activity; if(!r.category) r.category=tpl[h].category||catFor(r.activity)||""; n++; } });
     if(n) scheduleSave(date);
     renderLog(); toast(n? `Prefilled ${n} hour${n>1?"s":""}` : "Every hour already has an activity");
   };
   $("#saveTpl").onclick=async()=>{
     const hours=(getDay(date)||blankDay(date)).hours.map(r=>({activity:r.activity,category:r.category}));
-    S.template={hours}; lsSet("template",S.template);
-    if(S.sb && S.user && S.conn==="ok"){
-      const {error}=await S.sb.from("settings").upsert({user_id:S.user.id, template:S.template, updated_at:new Date().toISOString()});
-      toast(error?"Template saved on this device; it will sync later":"Template saved");
-    } else toast("Template saved on this device; it will sync later");
+    S.template={hours};
+    toast(await pushSettings() ? "Template saved" : "Template saved on this device; it will sync later");
   };
   $("#clearWrap").onclick=e=>{
     const id=e.target.id;
@@ -553,7 +692,9 @@ function renderLog(){
   tbody.addEventListener("change", e=>{
     const tr=e.target.closest("tr"); if(!tr) return; const h=+tr.dataset.h; const r=ensureDay(date).hours[h];
     if(e.target.id.startsWith("a-")){
-      if(r.activity && DEFAULT_CAT[r.activity] && !r.category){ r.category=DEFAULT_CAT[r.activity]; $("#c-"+h).value=r.category; tr.dataset.cat=r.category; }
+      const c=canon(r.activity); if(c!==r.activity){ r.activity=c; e.target.value=c; }   // match your list's spelling
+      const dc=catFor(c);
+      if(c && dc && !r.category){ r.category=dc; $("#c-"+h).value=r.category; tr.dataset.cat=r.category; }
       scheduleSave(date); refreshStrip();
     } else if(e.target.id.startsWith("c-")){ r.category=e.target.value; tr.dataset.cat=r.category; scheduleSave(date); refreshStrip(); }
   });
@@ -645,7 +786,7 @@ function renderDashboard(){
   </div>
   <div class="grid2">
     <div class="panel"><header><h2>Activities you do most</h2><p class="note">Hours this month · avg rating</p></header>
-      <div class="acts">${st.actList.slice(0,12).map(a=>`<div class="act"><span>${esc(a.name)}</span><div class="track"><div class="fill" style="width:${a.hrs/st.actList[0].hrs*100}%;background:var(${CAT_VAR[a.cat]||"--c-off"})"></div></div><span class="val">${a.hrs} h · ${r1(a.avg)}</span></div>`).join("")}</div></div>
+      <div class="acts">${st.actList.slice(0,12).map(a=>`<div class="actbar"><span>${esc(a.name)}</span><div class="track"><div class="fill" style="width:${a.hrs/st.actList[0].hrs*100}%;background:var(${CAT_VAR[a.cat]||"--c-off"})"></div></div><span class="val">${a.hrs} h · ${r1(a.avg)}</span></div>`).join("")}</div></div>
     <div class="panel"><header><h2>Productive hours by weekday</h2><p class="note">Average per logged day</p></header><div id="chartWd"></div></div>
   </div>`;
   bindMonth("mDash");
@@ -753,7 +894,9 @@ function enterApp(user){
   const switching = S.user?.id !== user.id;
   S.user=user;
   if(switching){
-    S.days=lsGet("days",{})||{}; S.template=lsGet("template",null); pending=new Set(lsGet("pending",[]));
+    S.days=lsGet("days",{})||{}; pending=new Set(lsGet("pending",[]));
+    const ls=lsGet("settings",null); S.settingsDirty=!!lsGet("settingsDirty",false);
+    if(ls) applySettings(ls); else { const old=lsGet("template",null); S.template=old; S.acts=null; refreshActs(); }
     S.archives={}; S.loaded=false; S.rolled=false;
   }
   $("#view-auth").hidden=true; $("#view-setup").hidden=true;

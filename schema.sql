@@ -21,7 +21,7 @@ create table if not exists public.archives (
   primary key (user_id, month)
 );
 
--- Your saved prefill template.
+-- Your saved settings: the "template" column holds {hours: prefill template, activities: your activity list}.
 create table if not exists public.settings (
   user_id    uuid        primary key default auth.uid() references auth.users(id) on delete cascade,
   template   jsonb,
